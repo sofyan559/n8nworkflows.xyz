@@ -2,14 +2,14 @@
 /**
  * Plugin Name: Engineering Geniuses n8n Workflow Library
  * Description: Searchable n8n workflow library with real validated WEBP previews.
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Engineering Geniuses
  */
 
 if (!defined('ABSPATH')) exit;
 
-final class EG_N8N_Workflow_Library_102 {
-    const VERSION = '1.0.2';
+final class EG_N8N_Workflow_Library_103 {
+    const VERSION = '1.0.3';
     const OWNER = 'sofyan559';
     const REPO = 'n8nworkflows.xyz';
     const BRANCH = 'main';
@@ -129,4 +129,4 @@ final class EG_N8N_Workflow_Library_102 {
 <?php return ob_get_clean();
     }
 }
-EG_N8N_Workflow_Library_102::init();
+EG_N8N_Workflow_Library_103::init();
