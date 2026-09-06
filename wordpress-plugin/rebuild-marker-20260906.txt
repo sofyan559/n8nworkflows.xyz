@@ -1,0 +1,1 @@
+Rebuild the WordPress plugin artifact after refreshing catalog descriptions and removing n8nworkflows.xyz from card excerpts.
