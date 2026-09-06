@@ -1,1 +1,327 @@
-(()=>{const root=document.getElementById('eg-n8n-app');if(!root||!window.EGN8N)return;const PER=24,S={all:[],filtered:[],cat:'All workflows',q:'',sort:'preview-id-desc',page:1,sel:null,cache:new Map()},$=(s,r=document)=>r.querySelector(s),E={total:$('#egn-total'),search:$('#egn-search'),sort:$('#egn-sort'),clear:$('#egn-clear'),cats:$('#egn-categories'),mobile:$('#egn-mobile-category'),results:$('#egn-results'),list:$('#egn-list'),pages:$('#egn-pages'),modal:$('#egn-modal'),body:$('#egn-modalbody'),close:$('#egn-close'),download:$('#egn-download'),copy:$('#egn-copy'),n8n:$('#egn-n8n'),toast:$('#egn-toast')},esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])),encPath=p=>String(p).split('/').map(encodeURIComponent).join('/'),direct=(base,w,file)=>base+'workflows/'+encPath(w.folder)+'/'+encodeURIComponent(file),proxy=(kind,w,file)=>EGN8N.ajaxUrl+'?action=eg_n8n_asset&kind='+kind+'&folder='+encodeURIComponent(w.folder)+'&file='+encodeURIComponent(file);function img(w,big=false){if(!w.preview)return'<div class="egn-state">No validated preview image.</div>';let a=direct(EGN8N.rawBase,w,w.preview),b=direct(EGN8N.cdnBase,w,w.preview),c=proxy('image',w,w.preview);return'<img '+(big?'':'loading="lazy" decoding="async" ')+'src="'+esc(a)+'" data-f1="'+esc(b)+'" data-f2="'+esc(c)+'" alt="'+esc(w.title)+' preview"><div class="egn-state" style="display:none">Preview unavailable.</div>'}document.addEventListener('error',e=>{let x=e.target;if(!(x instanceof HTMLImageElement)||!x.closest('#eg-n8n-app,.egn-modal'))return;if(x.dataset.f1){x.src=x.dataset.f1;delete x.dataset.f1;return}if(x.dataset.f2){x.src=x.dataset.f2;delete x.dataset.f2;return}x.style.display='none';let n=x.nextElementSibling;if(n&&n.classList.contains('egn-state'))n.style.display='grid'},true);async function text(w,file){if(!file)return'';for(let u of [direct(EGN8N.rawBase,w,file),direct(EGN8N.cdnBase,w,file),proxy('text',w,file)]){try{let r=await fetch(u,{cache:'force-cache'});if(r.ok)return await r.text()}catch(e){}}return''}async function init(){try{let r=await fetch(EGN8N.catalogUrl,{cache:'no-store'});if(!r.ok)throw Error('Local catalog HTTP '+r.status);let d=await r.json();if(!Array.isArray(d.workflows))throw Error('Invalid local catalog');S.all=d.workflows;E.total.textContent=(d.count||S.all.length).toLocaleString();cats();apply()}catch(e){console.error(e);E.results.textContent='Catalog unavailable';E.list.innerHTML='<div class="egn-empty"><strong>Local plugin catalog could not be loaded.</strong><br>'+esc(e.message)+'</div>'}}function cats(){let m=new Map([['All workflows',S.all.length]]);S.all.forEach(w=>(w.categories||[]).forEach(c=>m.set(c,(m.get(c)||0)+1)));let a=[...m.entries()].sort((x,y)=>x[0]==='All workflows'?-1:y[0]==='All workflows'?1:y[1]-x[1]);E.cats.innerHTML=a.map(([c,n])=>'<button class="egn-cat '+(c===S.cat?'on':'')+'" data-cat="'+esc(c)+'"><span>'+esc(c)+'</span><small>'+n.toLocaleString()+'</small></button>').join('');E.mobile.innerHTML=a.map(([c,n])=>'<option value="'+esc(c)+'">'+esc(c)+' ('+n.toLocaleString()+')</option>').join('');E.mobile.value=S.cat}function apply(){let q=S.q.trim().toLowerCase(),coll=new Intl.Collator(undefined,{numeric:true,sensitivity:'base'}),a=S.all.filter(w=>(S.cat==='All workflows'||(w.categories||[]).includes(S.cat))&&(!q||q.split(/\s+/).every(p=>(w.search||((w.title||'')+' '+(w.categories||[]).join(' ')+' '+(w.excerpt||''))).toLowerCase().includes(p))));a.sort((x,y)=>S.sort==='title-asc'?coll.compare(x.title||'',y.title||''):S.sort==='title-desc'?coll.compare(y.title||'',x.title||''):S.sort==='id-desc'?(y.id||0)-(x.id||0):(y.preview?1:0)-(x.preview?1:0)||(y.id||0)-(x.id||0));S.filtered=a;S.page=Math.min(S.page,Math.max(1,Math.ceil(a.length/PER)));render()}function render(){E.results.innerHTML='<strong>'+S.filtered.length.toLocaleString()+'</strong> workflows found';let a=S.filtered.slice((S.page-1)*PER,S.page*PER);if(!a.length){E.list.innerHTML='<div class="egn-empty">No workflows match your search.</div>';E.pages.innerHTML='';return}E.list.innerHTML='<div class="egn-grid">'+a.map(w=>'<article class="egn-card" data-folder="'+esc(w.folder)+'"><div class="egn-media">'+img(w)+'<div class="egn-badges"><span class="egn-badge egn-free">Free</span><span class="egn-badge">'+(w.id?'#'+w.id:'Workflow')+'</span></div></div><div class="egn-body"><h3>'+esc(w.title)+'</h3>'+(w.excerpt?'<p class="egn-excerpt">'+esc(w.excerpt)+'</p>':'')+'<div class="egn-chips">'+(w.categories||[]).slice(0,3).map(c=>'<span class="egn-chip">'+esc(c)+'</span>').join('')+'</div><div class="egn-foot"><span>Open workflow</span><span>→</span></div></div></article>').join('')+'</div>';pages()}function pages(){let t=Math.max(1,Math.ceil(S.filtered.length/PER));if(t<=1){E.pages.innerHTML='';return}let c=S.page,n=[...new Set([1,t,c,c-1,c+1,c-2,c+2].filter(x=>x>=1&&x<=t))].sort((a,b)=>a-b),h='<button class="egn-page" data-page="'+(c-1)+'" '+(c===1?'disabled':'')+'>‹</button>',p=0;n.forEach(x=>{if(p&&x-p>1)h+='<span>…</span>';h+='<button class="egn-page '+(x===c?'on':'')+'" data-page="'+x+'">'+x+'</button>';p=x});h+='<button class="egn-page" data-page="'+(c+1)+'" '+(c===t?'disabled':'')+'>›</button>';E.pages.innerHTML=h}const node=t=>String(t||'').split('.').pop().replace(/([a-z])([A-Z])/g,'$1 $2');async function openW(w){S.sel=w;E.modal.classList.add('open');document.body.style.overflow='hidden';E.body.innerHTML='<div class="egn-loading"><i></i>Loading workflow details…</div>';let d=S.cache.get(w.folder);if(!d){let [readme,jsonText]=await Promise.all([text(w,w.readme),text(w,w.workflow_json)]);d={readme,jsonText};S.cache.set(w.folder,d)}E.download.disabled=!d.jsonText;E.copy.disabled=!d.jsonText;if(w.n8n_url){E.n8n.href=w.n8n_url;E.n8n.style.display='inline-flex'}else E.n8n.style.display='none';let formatted=d.jsonText;try{formatted=JSON.stringify(JSON.parse(d.jsonText),null,2)}catch(e){}E.body.innerHTML='<div class="egn-chips">'+(w.categories||[]).map(c=>'<span class="egn-chip">'+esc(c)+'</span>').join('')+'</div><h1 class="egn-detail-title">'+esc(w.title)+'</h1><div class="egn-detail-grid"><div class="egn-big">'+img(w,true)+'</div><aside><div class="egn-box"><h4>Workflow</h4><div style="font-weight:850;margin-bottom:8px">'+esc(w.workflow_name||w.title)+'</div><div class="egn-minis"><div class="egn-mini"><strong>'+(w.node_count||0)+'</strong><span>Nodes</span></div><div class="egn-mini"><strong>'+((w.node_types||[]).length)+'</strong><span>Node types</span></div><div class="egn-mini"><strong>'+(w.id||'—')+'</strong><span>Template ID</span></div><div class="egn-mini"><strong>'+(w.preview?'Yes':'No')+'</strong><span>Validated preview</span></div></div></div><div class="egn-box"><h4>Nodes used</h4><div class="egn-chips">'+(w.node_types||[]).slice(0,18).map(n=>'<span class="egn-chip">'+esc(node(n.type))+(n.count>1?' ×'+n.count:'')+'</span>').join('')+'</div></div></aside></div>'+(d.readme?'<section class="egn-section"><h2>Workflow details</h2><div class="egn-readme"><pre>'+esc(d.readme)+'</pre></div></section>':'')+'<section class="egn-section"><h2>Workflow JSON</h2>'+(d.jsonText?'<pre class="egn-json">'+esc(formatted)+'</pre>':'<div class="egn-empty">Workflow JSON unavailable.</div>')+'</section>'}function close(){E.modal.classList.remove('open');document.body.style.overflow='';S.sel=null}function toast(s){E.toast.textContent=s;E.toast.classList.add('show');clearTimeout(toast.t);toast.t=setTimeout(()=>E.toast.classList.remove('show'),1500)}E.search.addEventListener('input',()=>{S.q=E.search.value;S.page=1;apply()});E.sort.addEventListener('change',()=>{S.sort=E.sort.value;S.page=1;apply()});E.clear.addEventListener('click',()=>{E.search.value='';S.q='';S.cat='All workflows';S.page=1;cats();apply()});E.cats.addEventListener('click',e=>{let b=e.target.closest('[data-cat]');if(!b)return;S.cat=b.dataset.cat;S.page=1;cats();apply()});E.mobile.addEventListener('change',()=>{S.cat=E.mobile.value;S.page=1;cats();apply()});E.pages.addEventListener('click',e=>{let b=e.target.closest('[data-page]');if(!b||b.disabled)return;S.page=+b.dataset.page;render();root.scrollIntoView({behavior:'smooth'})});E.list.addEventListener('click',e=>{let c=e.target.closest('.egn-card');if(!c)return;let w=S.all.find(x=>x.folder===c.dataset.folder);if(w)openW(w)});E.close.addEventListener('click',close);E.modal.addEventListener('click',e=>{if(e.target===E.modal)close()});document.addEventListener('keydown',e=>{if(e.key==='Escape')close()});E.copy.addEventListener('click',async()=>{let d=S.sel&&S.cache.get(S.sel.folder);if(!d?.jsonText)return;await navigator.clipboard.writeText(d.jsonText);toast('Workflow JSON copied')});E.download.addEventListener('click',()=>{let d=S.sel&&S.cache.get(S.sel.folder);if(!d?.jsonText)return;let u=URL.createObjectURL(new Blob([d.jsonText],{type:'application/json'})),a=document.createElement('a');a.href=u;a.download=(S.sel.workflow_json||'workflow.json').replace(/[^\w.\-]+/g,'_');a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)});init()})();
+(() => {
+  const root = document.getElementById('eg-n8n-app');
+  if (!root || !window.EGN8N) return;
+
+  const PER = 24;
+  const S = {
+    all: [], filtered: [], cat: 'All workflows', q: '', sort: 'preview-id-desc',
+    page: 1, sel: null, cache: new Map()
+  };
+
+  const $ = (s, r = document) => r.querySelector(s);
+  const E = {
+    total: $('#egn-total'), search: $('#egn-search'), sort: $('#egn-sort'), clear: $('#egn-clear'),
+    cats: $('#egn-categories'), mobile: $('#egn-mobile-category'), results: $('#egn-results'),
+    list: $('#egn-list'), pages: $('#egn-pages'), modal: $('#egn-modal'), body: $('#egn-modalbody'),
+    close: $('#egn-close'), download: $('#egn-download'), copy: $('#egn-copy'), n8n: $('#egn-n8n'),
+    toast: $('#egn-toast')
+  };
+
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+  }[c]));
+  const encPath = p => String(p).split('/').map(encodeURIComponent).join('/');
+  const direct = (base, w, file) => base + 'workflows/' + encPath(w.folder) + '/' + encodeURIComponent(file);
+  const proxy = (kind, w, file) => EGN8N.ajaxUrl + '?action=eg_n8n_asset&kind=' + kind + '&folder=' + encodeURIComponent(w.folder) + '&file=' + encodeURIComponent(file);
+
+  function img(w, big = false) {
+    if (!w.preview) return '<div class="egn-state">No validated preview image.</div>';
+    const a = direct(EGN8N.rawBase, w, w.preview);
+    const b = direct(EGN8N.cdnBase, w, w.preview);
+    const c = proxy('image', w, w.preview);
+    return '<img ' + (big ? '' : 'loading="lazy" decoding="async" ') +
+      'src="' + esc(a) + '" data-f1="' + esc(b) + '" data-f2="' + esc(c) +
+      '" alt="' + esc(w.title) + ' preview"><div class="egn-state" style="display:none">Preview unavailable.</div>';
+  }
+
+  document.addEventListener('error', e => {
+    const x = e.target;
+    if (!(x instanceof HTMLImageElement) || !x.closest('#eg-n8n-app,.egn-modal')) return;
+    if (x.dataset.f1) { x.src = x.dataset.f1; delete x.dataset.f1; return; }
+    if (x.dataset.f2) { x.src = x.dataset.f2; delete x.dataset.f2; return; }
+    x.style.display = 'none';
+    const n = x.nextElementSibling;
+    if (n && n.classList.contains('egn-state')) n.style.display = 'grid';
+  }, true);
+
+  async function text(w, file) {
+    if (!file) return '';
+    for (const u of [direct(EGN8N.rawBase, w, file), direct(EGN8N.cdnBase, w, file), proxy('text', w, file)]) {
+      try {
+        const r = await fetch(u, { cache: 'force-cache' });
+        if (r.ok) return await r.text();
+      } catch (e) {}
+    }
+    return '';
+  }
+
+  function stripCatalogLinks(s) {
+    return String(s || '')
+      .replace(/https?:\/\/(?:www\.)?n8nworkflows\.xyz\/\S*/gi, '')
+      .replace(/\bn8nworkflows\.xyz\b/gi, '')
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function cleanInline(md) {
+    let s = stripCatalogLinks(md);
+    s = s.replace(/!\[[^\]]*\]\([^)]+\)/g, '');
+    s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    s = s.replace(/`([^`]+)`/g, '$1');
+    s = s.replace(/\*\*([^*]+)\*\*/g, '$1');
+    s = s.replace(/__([^_]+)__/g, '$1');
+    s = s.replace(/\*([^*]+)\*/g, '$1');
+    s = s.replace(/_([^_]+)_/g, '$1');
+    return s.replace(/\s+/g, ' ').trim();
+  }
+
+  function normalizeReadme(readme, w) {
+    if (!readme) return '';
+    const title = (w?.title || '').toLowerCase().trim();
+    let raw = stripCatalogLinks(readme).replace(/\r\n/g, '\n');
+    let lines = raw.split('\n');
+
+    const overviewIndex = lines.findIndex(line => /^#{1,4}\s*(?:\d+[.)]?\s*)?(?:workflow\s+overview|overview|description|workflow\s+description)\s*$/i.test(line.trim()));
+    const analysisIndex = lines.findIndex(line => /^#{1,4}\s*workflow\s+analysis\b/i.test(line.trim()));
+    const firstUseful = overviewIndex >= 0 ? Math.max(0, overviewIndex) : (analysisIndex >= 0 ? Math.max(0, analysisIndex) : 0);
+    if (firstUseful > 0) lines = lines.slice(firstUseful);
+
+    const out = [];
+    let fenced = false;
+    for (const rawLine of lines) {
+      let line = rawLine.trimEnd();
+      const t = line.trim();
+      if (t.startsWith('```')) { fenced = !fenced; continue; }
+      if (fenced) continue;
+      if (!t) { out.push(''); continue; }
+      if (/^https?:\/\//i.test(t)) continue;
+      if (/n8nworkflows\.xyz/i.test(t)) continue;
+      if (/^(the user wants|let me |i will |i'll |i need to |let me now produce|let me analyze|let me break down)/i.test(t)) continue;
+      const headingText = t.replace(/^#+\s*/, '').replace(/^\d+(?:\.\d+)*[.)]?\s*/, '').trim();
+      if (title && headingText.toLowerCase() === title) continue;
+      if (/^[-*_]{3,}$/.test(t)) continue;
+      out.push(line);
+    }
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
+  function renderReadme(readme, w) {
+    const clean = normalizeReadme(readme, w);
+    if (!clean) return '';
+
+    const lines = clean.split('\n');
+    const blocks = [];
+    let i = 0;
+    let shownSections = 0;
+    const MAX_SECTIONS = 6;
+
+    while (i < lines.length && shownSections < MAX_SECTIONS) {
+      const t = lines[i].trim();
+      if (!t) { i++; continue; }
+
+      const hm = t.match(/^(#{1,4})\s*(.+)$/);
+      if (hm) {
+        let h = cleanInline(hm[2]).replace(/^\d+(?:\.\d+)*[.)]?\s*/, '').trim();
+        if (/^(summary table|reproducing the workflow from scratch|general notes|resources)$/i.test(h)) break;
+        const level = Math.min(4, Math.max(2, hm[1].length + 1));
+        blocks.push('<h' + level + '>' + esc(h) + '</h' + level + '>');
+        shownSections++;
+        i++;
+        continue;
+      }
+
+      if (/^[-*+]\s+/.test(t)) {
+        const items = [];
+        while (i < lines.length && /^[-*+]\s+/.test(lines[i].trim())) {
+          items.push('<li>' + esc(cleanInline(lines[i].trim().replace(/^[-*+]\s+/, ''))) + '</li>');
+          i++;
+          if (items.length >= 8) break;
+        }
+        if (items.length) blocks.push('<ul>' + items.join('') + '</ul>');
+        continue;
+      }
+
+      if (/^\d+[.)]\s+/.test(t)) {
+        const items = [];
+        while (i < lines.length && /^\d+[.)]\s+/.test(lines[i].trim())) {
+          items.push('<li>' + esc(cleanInline(lines[i].trim().replace(/^\d+[.)]\s+/, ''))) + '</li>');
+          i++;
+          if (items.length >= 8) break;
+        }
+        if (items.length) blocks.push('<ol>' + items.join('') + '</ol>');
+        continue;
+      }
+
+      if (t.startsWith('|')) {
+        while (i < lines.length && lines[i].trim().startsWith('|')) i++;
+        continue;
+      }
+
+      const para = [];
+      while (i < lines.length) {
+        const p = lines[i].trim();
+        if (!p || /^(#{1,4})\s+/.test(p) || /^[-*+]\s+/.test(p) || /^\d+[.)]\s+/.test(p) || p.startsWith('|')) break;
+        const c = cleanInline(p);
+        if (c) para.push(c);
+        i++;
+        if (para.join(' ').length > 900) break;
+      }
+      const sentence = para.join(' ').trim();
+      if (sentence) blocks.push('<p>' + esc(sentence) + '</p>');
+      else i++;
+    }
+
+    return blocks.join('');
+  }
+
+  async function init() {
+    try {
+      const r = await fetch(EGN8N.catalogUrl, { cache: 'no-store' });
+      if (!r.ok) throw Error('Local catalog HTTP ' + r.status);
+      const d = await r.json();
+      if (!Array.isArray(d.workflows)) throw Error('Invalid local catalog');
+      S.all = d.workflows;
+      E.total.textContent = (d.count || S.all.length).toLocaleString();
+      cats();
+      apply();
+    } catch (e) {
+      console.error(e);
+      E.results.textContent = 'Catalog unavailable';
+      E.list.innerHTML = '<div class="egn-empty"><strong>Local plugin catalog could not be loaded.</strong><br>' + esc(e.message) + '</div>';
+    }
+  }
+
+  function cats() {
+    const m = new Map([['All workflows', S.all.length]]);
+    S.all.forEach(w => (w.categories || []).forEach(c => m.set(c, (m.get(c) || 0) + 1)));
+    const a = [...m.entries()].sort((x, y) => x[0] === 'All workflows' ? -1 : y[0] === 'All workflows' ? 1 : y[1] - x[1]);
+    E.cats.innerHTML = a.map(([c, n]) => '<button class="egn-cat ' + (c === S.cat ? 'on' : '') + '" data-cat="' + esc(c) + '"><span>' + esc(c) + '</span><small>' + n.toLocaleString() + '</small></button>').join('');
+    E.mobile.innerHTML = a.map(([c, n]) => '<option value="' + esc(c) + '">' + esc(c) + ' (' + n.toLocaleString() + ')</option>').join('');
+    E.mobile.value = S.cat;
+  }
+
+  function apply() {
+    const q = S.q.trim().toLowerCase();
+    const coll = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+    const a = S.all.filter(w =>
+      (S.cat === 'All workflows' || (w.categories || []).includes(S.cat)) &&
+      (!q || q.split(/\s+/).every(p => (w.search || ((w.title || '') + ' ' + (w.categories || []).join(' ') + ' ' + (w.excerpt || ''))).toLowerCase().includes(p)))
+    );
+    a.sort((x, y) => S.sort === 'title-asc' ? coll.compare(x.title || '', y.title || '') :
+      S.sort === 'title-desc' ? coll.compare(y.title || '', x.title || '') :
+      S.sort === 'id-desc' ? (y.id || 0) - (x.id || 0) :
+      (y.preview ? 1 : 0) - (x.preview ? 1 : 0) || (y.id || 0) - (x.id || 0));
+    S.filtered = a;
+    S.page = Math.min(S.page, Math.max(1, Math.ceil(a.length / PER)));
+    render();
+  }
+
+  function render() {
+    E.results.innerHTML = '<strong>' + S.filtered.length.toLocaleString() + '</strong> workflows found';
+    const a = S.filtered.slice((S.page - 1) * PER, S.page * PER);
+    if (!a.length) {
+      E.list.innerHTML = '<div class="egn-empty">No workflows match your search.</div>';
+      E.pages.innerHTML = '';
+      return;
+    }
+    E.list.innerHTML = '<div class="egn-grid">' + a.map(w =>
+      '<article class="egn-card" data-folder="' + esc(w.folder) + '"><div class="egn-media">' + img(w) +
+      '<div class="egn-badges"><span class="egn-badge egn-free">Free</span><span class="egn-badge">' + (w.id ? '#' + w.id : 'Workflow') +
+      '</span></div></div><div class="egn-body"><h3>' + esc(w.title) + '</h3>' +
+      (w.excerpt ? '<p class="egn-excerpt">' + esc(stripCatalogLinks(w.excerpt)) + '</p>' : '') +
+      '<div class="egn-chips">' + (w.categories || []).slice(0, 3).map(c => '<span class="egn-chip">' + esc(c) + '</span>').join('') +
+      '</div><div class="egn-foot"><span>Open workflow</span><span>→</span></div></div></article>'
+    ).join('') + '</div>';
+    pages();
+  }
+
+  function pages() {
+    const t = Math.max(1, Math.ceil(S.filtered.length / PER));
+    if (t <= 1) { E.pages.innerHTML = ''; return; }
+    const c = S.page;
+    const n = [...new Set([1, t, c, c - 1, c + 1, c - 2, c + 2].filter(x => x >= 1 && x <= t))].sort((a, b) => a - b);
+    let h = '<button class="egn-page" data-page="' + (c - 1) + '" ' + (c === 1 ? 'disabled' : '') + '>‹</button>';
+    let p = 0;
+    n.forEach(x => {
+      if (p && x - p > 1) h += '<span>…</span>';
+      h += '<button class="egn-page ' + (x === c ? 'on' : '') + '" data-page="' + x + '">' + x + '</button>';
+      p = x;
+    });
+    h += '<button class="egn-page" data-page="' + (c + 1) + '" ' + (c === t ? 'disabled' : '') + '>›</button>';
+    E.pages.innerHTML = h;
+  }
+
+  const node = t => String(t || '').split('.').pop().replace(/([a-z])([A-Z])/g, '$1 $2');
+
+  async function openW(w) {
+    S.sel = w;
+    E.modal.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    E.body.innerHTML = '<div class="egn-loading"><i></i>Loading workflow details…</div>';
+
+    let d = S.cache.get(w.folder);
+    if (!d) {
+      const [readme, jsonText] = await Promise.all([text(w, w.readme), text(w, w.workflow_json)]);
+      d = { readme, jsonText };
+      S.cache.set(w.folder, d);
+    }
+
+    E.download.disabled = !d.jsonText;
+    E.copy.disabled = !d.jsonText;
+    if (w.n8n_url) { E.n8n.href = w.n8n_url; E.n8n.style.display = 'inline-flex'; }
+    else E.n8n.style.display = 'none';
+
+    let formatted = d.jsonText;
+    try { formatted = JSON.stringify(JSON.parse(d.jsonText), null, 2); } catch (e) {}
+
+    const overview = stripCatalogLinks(w.excerpt || '');
+    const doc = renderReadme(d.readme, w);
+
+    E.body.innerHTML =
+      '<div class="egn-chips">' + (w.categories || []).map(c => '<span class="egn-chip">' + esc(c) + '</span>').join('') + '</div>' +
+      '<h1 class="egn-detail-title">' + esc(w.title) + '</h1>' +
+      (overview ? '<div class="egn-overview"><span>Workflow overview</span><p>' + esc(overview) + '</p></div>' : '') +
+      '<div class="egn-detail-grid"><div class="egn-big">' + img(w, true) + '</div><aside>' +
+      '<div class="egn-box"><h4>Workflow</h4><div style="font-weight:850;margin-bottom:8px">' + esc(w.workflow_name || w.title) + '</div>' +
+      '<div class="egn-minis"><div class="egn-mini"><strong>' + (w.node_count || 0) + '</strong><span>Nodes</span></div>' +
+      '<div class="egn-mini"><strong>' + ((w.node_types || []).length) + '</strong><span>Node types</span></div>' +
+      '<div class="egn-mini"><strong>' + (w.id || '—') + '</strong><span>Template ID</span></div>' +
+      '<div class="egn-mini"><strong>' + (w.preview ? 'Yes' : 'No') + '</strong><span>Validated preview</span></div></div></div>' +
+      '<div class="egn-box"><h4>Nodes used</h4><div class="egn-chips">' +
+      (w.node_types || []).slice(0, 18).map(n => '<span class="egn-chip">' + esc(node(n.type)) + (n.count > 1 ? ' ×' + n.count : '') + '</span>').join('') +
+      '</div></div></aside></div>' +
+      (doc ? '<section class="egn-section"><h2>How this workflow works</h2><div class="egn-doc">' + doc + '</div></section>' : '') +
+      '<section class="egn-section egn-json-section"><details><summary>Workflow JSON</summary>' +
+      (d.jsonText ? '<pre class="egn-json">' + esc(formatted) + '</pre>' : '<div class="egn-empty">Workflow JSON unavailable.</div>') +
+      '</details></section>';
+  }
+
+  function close() {
+    E.modal.classList.remove('open');
+    document.body.style.overflow = '';
+    S.sel = null;
+  }
+
+  function toast(s) {
+    E.toast.textContent = s;
+    E.toast.classList.add('show');
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => E.toast.classList.remove('show'), 1500);
+  }
+
+  E.search.addEventListener('input', () => { S.q = E.search.value; S.page = 1; apply(); });
+  E.sort.addEventListener('change', () => { S.sort = E.sort.value; S.page = 1; apply(); });
+  E.clear.addEventListener('click', () => { E.search.value = ''; S.q = ''; S.cat = 'All workflows'; S.page = 1; cats(); apply(); });
+  E.cats.addEventListener('click', e => { const b = e.target.closest('[data-cat]'); if (!b) return; S.cat = b.dataset.cat; S.page = 1; cats(); apply(); });
+  E.mobile.addEventListener('change', () => { S.cat = E.mobile.value; S.page = 1; cats(); apply(); });
+  E.pages.addEventListener('click', e => { const b = e.target.closest('[data-page]'); if (!b || b.disabled) return; S.page = +b.dataset.page; render(); root.scrollIntoView({ behavior: 'smooth' }); });
+  E.list.addEventListener('click', e => { const c = e.target.closest('.egn-card'); if (!c) return; const w = S.all.find(x => x.folder === c.dataset.folder); if (w) openW(w); });
+  E.close.addEventListener('click', close);
+  E.modal.addEventListener('click', e => { if (e.target === E.modal) close(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  E.copy.addEventListener('click', async () => { const d = S.sel && S.cache.get(S.sel.folder); if (!d?.jsonText) return; await navigator.clipboard.writeText(d.jsonText); toast('Workflow JSON copied'); });
+  E.download.addEventListener('click', () => { const d = S.sel && S.cache.get(S.sel.folder); if (!d?.jsonText) return; const u = URL.createObjectURL(new Blob([d.jsonText], { type: 'application/json' })); const a = document.createElement('a'); a.href = u; a.download = (S.sel.workflow_json || 'workflow.json').replace(/[^\w.\-]+/g, '_'); a.click(); setTimeout(() => URL.revokeObjectURL(u), 1000); });
+
+  init();
+})();
