@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / 'wordpress-plugin' / 'eg-n8n-workflow-library'
 CATALOG = ROOT / 'catalog-index.json'
 BUILD = ROOT / 'dist' / 'eg-n8n-workflow-library'
-ZIP = ROOT / 'dist' / 'eg-n8n-workflow-library-v1.0.2.zip'
+ZIP = ROOT / 'dist' / 'eg-n8n-workflow-library-v1.0.3.zip'
 
 if not SRC.exists():
     raise SystemExit(f'Missing plugin source: {SRC}')
