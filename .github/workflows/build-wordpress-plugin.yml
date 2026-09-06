@@ -30,12 +30,12 @@ jobs:
 
       - name: Validate archive
         run: |
-          unzip -t dist/eg-n8n-workflow-library-v1.0.2.zip
-          unzip -l dist/eg-n8n-workflow-library-v1.0.2.zip | grep catalog.json
+          unzip -t dist/eg-n8n-workflow-library-v1.0.3.zip
+          unzip -l dist/eg-n8n-workflow-library-v1.0.3.zip | grep catalog.json
 
       - name: Upload plugin ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: eg-n8n-workflow-library-v1.0.2
-          path: dist/eg-n8n-workflow-library-v1.0.2.zip
+          name: eg-n8n-workflow-library-v1.0.3
+          path: dist/eg-n8n-workflow-library-v1.0.3.zip
           if-no-files-found: error
