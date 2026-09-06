@@ -31,6 +31,22 @@ def first_nonempty(*values):
             return v
     return None
 
+def is_real_image(path: Path) -> bool:
+    try:
+        data = path.read_bytes()[:16]
+    except Exception:
+        return False
+    ext = path.suffix.lower()
+    if ext == ".webp":
+        return len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    if ext == ".png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if ext in {".jpg", ".jpeg"}:
+        return data.startswith(b"\xff\xd8\xff")
+    if ext == ".gif":
+        return data.startswith((b"GIF87a", b"GIF89a"))
+    return False
+
 def read_excerpt(readme: Path, limit=220):
     if not readme:
         return ""
@@ -103,11 +119,20 @@ def main():
         raise SystemExit(f"Missing workflows directory: {WORKFLOWS}")
 
     entries = []
+    valid_previews = 0
+    invalid_previews = 0
 
     for folder in sorted((p for p in WORKFLOWS.iterdir() if p.is_dir()), key=lambda p: p.name.lower()):
         files = [p for p in folder.iterdir() if p.is_file()]
 
-        image = next((p for p in files if p.suffix.lower() in IMAGE_EXTS), None)
+        image_candidates = [p for p in files if p.suffix.lower() in IMAGE_EXTS]
+        image = next((p for p in image_candidates if is_real_image(p)), None)
+        has_preview_file = bool(image_candidates)
+        if image:
+            valid_previews += 1
+        elif has_preview_file:
+            invalid_previews += 1
+
         metadata_file = next((p for p in files if META_RE.match(p.name)), None)
         readme_file = next((p for p in files if README_RE.match(p.name)), None)
         if readme_file is None:
@@ -129,6 +154,8 @@ def main():
             "folder": folder.name,
             "title": clean_title(folder.name),
             "preview": image.name if image else None,
+            "preview_valid": bool(image),
+            "has_preview_file": has_preview_file,
             "workflow_json": workflow_json_file.name if workflow_json_file else None,
             "readme": readme_file.name if readme_file else None,
             "metadata": metadata_file.name if metadata_file else None,
@@ -156,8 +183,10 @@ def main():
         entries.append(entry)
 
     output = {
-        "version": 1,
+        "version": 2,
         "count": len(entries),
+        "valid_preview_count": valid_previews,
+        "invalid_preview_file_count": invalid_previews,
         "workflows": entries,
     }
 
@@ -166,6 +195,7 @@ def main():
         encoding="utf-8"
     )
     print(f"Wrote {len(entries)} workflows to {OUTPUT}")
+    print(f"Valid image previews: {valid_previews}; invalid image-named files: {invalid_previews}")
 
 if __name__ == "__main__":
     main()
