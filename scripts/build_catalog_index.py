@@ -11,13 +11,18 @@ IMAGE_EXTS = {".webp", ".png", ".jpg", ".jpeg", ".gif"}
 META_RE = re.compile(r"^metada(?:ta)?-\d+\.json$", re.I)
 README_RE = re.compile(r"^readme-\d+\.md$", re.I)
 ID_RE = re.compile(r"-(\d+)\s*$")
+URL_RE = re.compile(r"https?://\S+", re.I)
+CATALOG_URL_RE = re.compile(r"https?://(?:www\.)?n8nworkflows\.xyz/\S*", re.I)
+
 
 def clean_title(folder_name: str) -> str:
     return ID_RE.sub("", folder_name).replace("_", " ").strip()
 
+
 def template_id(folder_name: str):
     m = ID_RE.search(folder_name)
     return int(m.group(1)) if m else None
+
 
 def read_json(path: Path):
     try:
@@ -25,11 +30,13 @@ def read_json(path: Path):
     except Exception:
         return {}
 
+
 def first_nonempty(*values):
     for v in values:
         if v not in (None, "", [], {}):
             return v
     return None
+
 
 def is_real_image(path: Path) -> bool:
     try:
@@ -47,34 +54,104 @@ def is_real_image(path: Path) -> bool:
         return data.startswith((b"GIF87a", b"GIF89a"))
     return False
 
-def read_excerpt(readme: Path, limit=220):
+
+def clean_description_text(text: str) -> str:
+    """Turn README prose into a clean card description."""
+    text = CATALOG_URL_RE.sub("", text)
+    text = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    text = re.sub(r"[*_`>#]", "", text)
+    text = re.sub(r"\s+", " ", text).strip(" -:\t\r\n")
+    return text
+
+
+def read_excerpt(readme: Path, title: str = "", limit: int = 240):
     if not readme:
         return ""
     try:
         text = readme.read_text(encoding="utf-8", errors="ignore")
     except Exception:
         return ""
-    lines = []
+
+    lines = text.replace("\r\n", "\n").split("\n")
+
+    # Prefer the actual overview/description section instead of the README title/URL.
+    overview_start = None
+    for i, raw in enumerate(lines):
+        heading = re.sub(r"^[#\s\d.:-]+", "", raw.strip()).strip().lower()
+        if heading in {"workflow overview", "overview", "description", "workflow description"}:
+            overview_start = i + 1
+            break
+
+    candidates = []
+    scan = lines[overview_start:] if overview_start is not None else lines
     fenced = False
-    for raw in text.splitlines():
+
+    for raw in scan:
         line = raw.strip()
         if line.startswith("```"):
             fenced = not fenced
             continue
-        if fenced or not line:
+        if fenced:
             continue
-        if line.startswith("#"):
-            continue
-        line = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", line)
-        line = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", line)
-        line = re.sub(r"[*_`>#-]+", " ", line)
-        line = re.sub(r"\s+", " ", line).strip()
-        if line:
-            lines.append(line)
-        if len(" ".join(lines)) >= limit:
+
+        # Stop at the next Markdown heading after we entered an overview section.
+        if overview_start is not None and line.startswith("#"):
             break
-    text = " ".join(lines).strip()
-    return (text[:limit].rstrip() + "…") if len(text) > limit else text
+        if not line:
+            if candidates:
+                break
+            continue
+
+        # Skip standalone URLs, catalog URLs, rules, table rows, and obvious list headings.
+        if URL_RE.fullmatch(line) or "n8nworkflows.xyz" in line.lower():
+            continue
+        if re.fullmatch(r"[-|:\s]+", line):
+            continue
+        if line.startswith("|"):
+            continue
+        if re.match(r"^[-*]\s+", line):
+            if candidates:
+                break
+            continue
+
+        cleaned = clean_description_text(line)
+        if not cleaned:
+            continue
+
+        # Avoid repeating the workflow title as its own description.
+        if title and cleaned.lower().strip(" .") == title.lower().strip(" ."):
+            continue
+
+        candidates.append(cleaned)
+        combined = " ".join(candidates)
+        if len(combined) >= limit or combined.endswith(('.', '!', '?')):
+            break
+
+    # Fallback: first useful prose paragraph anywhere in the README.
+    if not candidates:
+        paragraph = []
+        for raw in lines:
+            line = raw.strip()
+            if not line:
+                if paragraph:
+                    cleaned = clean_description_text(" ".join(paragraph))
+                    if cleaned and (not title or cleaned.lower().strip(" .") != title.lower().strip(" .")):
+                        candidates = [cleaned]
+                        break
+                    paragraph = []
+                continue
+            if line.startswith("#") or URL_RE.fullmatch(line) or "n8nworkflows.xyz" in line.lower() or line.startswith("|"):
+                continue
+            if re.match(r"^[-*]\s+", line):
+                continue
+            paragraph.append(line)
+
+    excerpt = clean_description_text(" ".join(candidates))
+    if not excerpt:
+        return ""
+    return (excerpt[:limit].rstrip(" ,;:-") + "…") if len(excerpt) > limit else excerpt
+
 
 def normalize_categories(meta):
     cats = meta.get("categories") or []
@@ -88,6 +165,7 @@ def normalize_categories(meta):
             if name and name not in out:
                 out.append(name)
     return out
+
 
 def node_summary(meta, workflow):
     raw = meta.get("nodeTypes")
@@ -113,6 +191,7 @@ def node_summary(meta, workflow):
         if t:
             counts[t] = counts.get(t, 0) + 1
     return [{"type": k, "count": v} for k, v in counts.items()], len(nodes)
+
 
 def main():
     if not WORKFLOWS.exists():
@@ -145,6 +224,7 @@ def main():
 
         meta = read_json(metadata_file) if metadata_file else {}
         workflow = read_json(workflow_json_file) if workflow_json_file else {}
+        title = clean_title(folder.name)
 
         cats = normalize_categories(meta)
         nodes, node_count = node_summary(meta, workflow)
@@ -152,7 +232,7 @@ def main():
         entry = {
             "id": template_id(folder.name),
             "folder": folder.name,
-            "title": clean_title(folder.name),
+            "title": title,
             "preview": image.name if image else None,
             "preview_valid": bool(image),
             "has_preview_file": has_preview_file,
@@ -160,8 +240,8 @@ def main():
             "readme": readme_file.name if readme_file else None,
             "metadata": metadata_file.name if metadata_file else None,
             "categories": cats,
-            "excerpt": read_excerpt(readme_file),
-            "workflow_name": workflow.get("name") or clean_title(folder.name),
+            "excerpt": read_excerpt(readme_file, title),
+            "workflow_name": workflow.get("name") or title,
             "active": bool(workflow.get("active")),
             "node_count": node_count,
             "node_types": nodes,
@@ -183,7 +263,7 @@ def main():
         entries.append(entry)
 
     output = {
-        "version": 2,
+        "version": 3,
         "count": len(entries),
         "valid_preview_count": valid_previews,
         "invalid_preview_file_count": invalid_previews,
@@ -196,6 +276,7 @@ def main():
     )
     print(f"Wrote {len(entries)} workflows to {OUTPUT}")
     print(f"Valid image previews: {valid_previews}; invalid image-named files: {invalid_previews}")
+
 
 if __name__ == "__main__":
     main()
