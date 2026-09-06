@@ -33,7 +33,7 @@ jobs:
       - name: Commit updated index
         shell: bash
         run: |
-          if git diff --quiet -- catalog-index.json; then
+          if [ -z "$(git status --porcelain -- catalog-index.json)" ]; then
             echo "catalog-index.json is already up to date."
             exit 0
           fi
