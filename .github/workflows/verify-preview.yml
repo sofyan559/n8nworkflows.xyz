@@ -1,0 +1,51 @@
+name: Verify real WEBP previews
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/verify_preview_page.py"
+      - ".github/workflows/verify-preview.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build verification page from real WEBP files
+        run: python scripts/verify_preview_page.py
+
+      - name: Install Chromium
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium
+
+      - name: Serve repository
+        run: |
+          python -m http.server 8765 > /tmp/http.log 2>&1 &
+          sleep 2
+
+      - name: Capture screenshot
+        run: |
+          CHROME=$(command -v chromium-browser || command -v chromium)
+          "$CHROME" --headless --no-sandbox --disable-gpu --hide-scrollbars --window-size=1440,1050 --screenshot=verification-screenshot.png http://127.0.0.1:8765/verification.html
+          test -s verification-screenshot.png
+
+      - name: Upload verification screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-preview-verification
+          path: |
+            verification.html
+            verification-screenshot.png
